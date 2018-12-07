@@ -6,16 +6,17 @@ import (
 	"os"
 )
 
-type Point struct { X, Y int }
+type Point struct{ X, Y int }
 
 func Boundaries(points []Point) (Point, Point) {
-        min, max := points[0], points[0]
+	min, max := points[0], points[0]
 	for _, p := range points[1:] {
 		if min.X > p.X {
 			min.X = p.X
 		}
 		if min.Y > p.Y {
-			min.Y = p.Y}
+			min.Y = p.Y
+		}
 		if max.X < p.X {
 			max.X = p.X
 		}
@@ -25,12 +26,11 @@ func Boundaries(points []Point) (Point, Point) {
 	}
 	return min, max
 }
-		
 
 func main() {
-	var points []Point 
-	f, err:= os.Open("6.data")
-        if err != nil {
+	var points []Point
+	f, err := os.Open("6.data")
+	if err != nil {
 		fmt.Printf("can't open file: %v\n", err)
 		os.Exit(1)
 	}
