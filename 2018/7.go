@@ -24,10 +24,13 @@ func addEdge(from, to string) {
 	}
 }
 
-const elves = 2
+const maxelves = 2
+const timebonus = 0
+
+var tokens = make(chan struct{}, maxelves)
+var clock = make(chan int)
 
 func main() {
-
 	f, err := os.Open("7.data")
 	if err != nil {
 		fmt.Printf("can't open file: %v\n", err)
@@ -35,7 +38,6 @@ func main() {
 	}
 	input := bufio.NewScanner(f)
 	for input.Scan() {
-
 		tokens := strings.Split(input.Text(), " ")
 		start := tokens[1]
 		end := tokens[7]
@@ -51,21 +53,36 @@ func main() {
 	}
 	sort.Strings(alphanodes)
 	fmt.Printf("alphanodes: %v\n", alphanodes)
-	var nextnode string
+
 	for len(graph) > 0 {
+		var tocleanup = make(chan string)
+		var working = false
 		for _, n := range alphanodes {
-			if graph[n] != nil &&
-				len(graph[n]) == 0 {
-				nextnode = n
-				fmt.Printf("%v", nextnode)
+			if graph[n] != nil && len(graph[n]) == 0 {
+				go func(nextnode string) {
+					tokens <- struct{}{}
+					defer func() { <-tokens }()
+
+					timevalue := int(nextnode[0]) - 'A' + 1 + timebonus
+					fmt.Printf("%v%v ", nextnode, timevalue)
+					tocleanup <- nextnode
+				}(n)
+				working = true
 				break
+
 			}
 		}
-		for cleanup := range graph {
-			delete(graph[cleanup], nextnode)
+		// wait and cleanup
+		if working {
+		for val := range tocleanup {
+			for cleanup := range graph {
+				delete(graph[cleanup], val)
 
+			}
+			delete(graph, val)
 		}
-		delete(graph, nextnode)
+			working = false
+		}
 	}
 	fmt.Printf("\n")
 
