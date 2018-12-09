@@ -45,6 +45,7 @@ func sumMetaData(license []int) (int, int) {
 	}
 	fmt.Printf("c:%v m:%v len:%v\n", license[0], license[1], len(license))
 
+	// Parse out children recursively
 	for i:=0 ; i < license[0]; i++ {
 		s, c := sumMetaData(license[child_ptr:len(license) - license[1]])		
 		child_ptr = child_ptr + c
@@ -54,6 +55,7 @@ func sumMetaData(license []int) (int, int) {
 		panic("consumed too much")
 	}
 
+	// add up our own metadata
 	for i:= 0; i < license[1]; i++ {
 		sum = sum + license[child_ptr]
 		child_ptr++
