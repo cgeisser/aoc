@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"os"
 	"strconv"
@@ -21,31 +22,56 @@ func main() {
 	}
 }
 
+type node struct {
+	value       int
+	left, right *node
+}
+
+func (n *node) String() string {
+	var start *node = nil
+	var buf bytes.Buffer
+	c := n
+	for c != start {
+		fmt.Fprintf(&buf, "%d ", c.value)
+		c = c.right
+		start = n
+	}
+	return buf.String()
+
+}
+
 func marbleGame(elves, max_marble int) int {
 	var elfscores = make([]int, elves)
-
-	var marbles = make([]int, 1, max_marble)
-	var cur_marble = 0
+	var cur_marble = new(node)
+	cur_marble.value = 0
+	cur_marble.left = cur_marble
+	cur_marble.right = cur_marble
 	for i := 1; i <= max_marble; i++ {
 		if i%23 == 0 {
-			rem := (len(marbles) + cur_marble - 7) % len(marbles)
-			elfscores[i%len(elfscores)] += i + marbles[rem]
-			copy(marbles[rem:], marbles[rem+1:])
-			marbles = marbles[:len(marbles)-1]
-			cur_marble = rem % len(marbles)
+			for j := 0; j < 7; j++ {
+				cur_marble = cur_marble.left
+			}
+			//fmt.Println("removing: ", cur_marble.value)
+			elfscores[i%len(elfscores)] += i + cur_marble.value
+			cur_marble.left.right = cur_marble.right
+			cur_marble.right.left = cur_marble.left
+			cur_marble = cur_marble.right
 		} else {
-			new_spot := (cur_marble + 2) % len(marbles)
-			marbles = append(marbles, -1)
-			copy(marbles[new_spot+1:], marbles[new_spot:])
+			cur_marble = cur_marble.right
 
-			marbles[new_spot] = i
+			new_spot := new(node)
+			new_spot.value = i
+			new_spot.right = cur_marble.right
+			new_spot.left = cur_marble
+			cur_marble.right.left = new_spot
+			cur_marble.right = new_spot
+
 			cur_marble = new_spot
+		}
 
-		}
-		if i%100000 == 0 {
-			fmt.Println("step ", i)
-			//fmt.Printf("step: %v %v cur: %v\n", i, marbles, marbles[cur_marble])
-		}
+		//fmt.Println("step ", i)
+		//fmt.Printf("%v cur: %v\n", cur_marble, cur_marble.value)
+
 	}
 
 	max := elfscores[0]
