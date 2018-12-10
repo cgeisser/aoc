@@ -4,8 +4,8 @@ import (
 	"bufio"
 	"fmt"
 	"os"
-	"strings"
 	"strconv"
+	"strings"
 )
 
 func main() {
@@ -18,48 +18,55 @@ func main() {
 	input.Scan()
 	var contents = input.Text()
 	f.Close()
-	
+
 	tokens := strings.Split(contents, " ")
 	var license_file = make([]int, 0, len(tokens))
 	for _, v := range tokens {
 		i, _ := strconv.Atoi(v)
 		license_file = append(license_file, i)
 	}
-	fmt.Printf("input data: %v\n", license_file)	
-        sum, consumed := sumMetaData(license_file)
-	fmt.Printf("sum: %v consumed: %v len: %v\n",
-		sum, consumed, len(license_file))
+	fmt.Printf("input data: %v\n", license_file)
+	sum, consumed, val := sumMetaData(license_file)
+	fmt.Printf("sum: %v consumed: %v val: %v len: %v\n",
+		sum, consumed, val, len(license_file))
 }
 
-func sumMetaData(license []int) (int, int) {
+func sumMetaData(license []int) (int, int, int) {
 	var sum int = 0
 	var child_ptr int = 2
-	if (len(license) < 4000) {
-	  fmt.Printf("processing: %v\n", license)
-	}
-	if (len(license) < 3*license[0] + license[1] + 2) {
-		panic("broken array length")
-	}
-	if (license[1] < 1) {
-		panic("no metadata")
+	if len(license) < 40 {
+		fmt.Printf("processing: %v\n", license)
 	}
 	fmt.Printf("c:%v m:%v len:%v\n", license[0], license[1], len(license))
 
 	// Parse out children recursively
-	for i:=0 ; i < license[0]; i++ {
-		s, c := sumMetaData(license[child_ptr:len(license) - license[1]])		
-		child_ptr = child_ptr + c
-		sum = sum + s
+	var childsums = make([]int, license[0])
+	for i := 0; i < license[0]; i++ {
+		s, c, v := sumMetaData(license[child_ptr : len(license)-license[1]])
+		child_ptr += c
+		sum += s
+		childsums[i] = v
 	}
-	if child_ptr + license[1] > len(license) {
+	if child_ptr+license[1] > len(license) {
 		panic("consumed too much")
 	}
 
+	var val = 0
 	// add up our own metadata
-	for i:= 0; i < license[1]; i++ {
+	fmt.Println(childsums)
+	for i := 0; i < license[1]; i++ {
 		sum = sum + license[child_ptr]
+		fmt.Println("metadata: ", license[child_ptr])
+		if license[child_ptr] > 0 &&
+			license[child_ptr]-1 < len(childsums) {
+			val += childsums[license[child_ptr]-1]
+		}
 		child_ptr++
 	}
-	fmt.Printf("sum: %v consumed: %v\n", sum, child_ptr)
-	return sum, child_ptr			
+	if len(childsums) == 0 {
+		val = sum
+	}
+
+	fmt.Printf("sum: %v consumed: %v val: %v\n", sum, child_ptr, val)
+	return sum, child_ptr, val
 }
