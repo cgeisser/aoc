@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 )
 
 func main() {
@@ -22,25 +23,36 @@ func main() {
 			elements.PushBack(string(c))
 		}
 		//fmt.Println("final length: ", reactAll(elements))
-		min_length := elements.Len()
+		var wg sync.WaitGroup
+		l := make(chan int, 26)
 		for b := byte('a'); b < byte('z')+1; b++ {
-			filtered := list.New()
-			for e := elements.Front(); e != nil; e = e.Next() {
-				c := e.Value.(string)[0]
-				//fmt.Println(string(c), string(b), string(b-'a'+'A'))
-				if c != b && c != b-'a'+'A' {
-					filtered.PushBack(string(c))
+			wg.Add(1)
+			b := b
+			go func() {
+				filtered := list.New()
+				for e := elements.Front(); e != nil; e = e.Next() {
+					c := e.Value.(string)[0]
+					//fmt.Println(string(c), string(b), string(b-'a'+'A'))
+					if c != b && c != b-'a'+'A' {
+						filtered.PushBack(string(c))
+					}
 				}
-			}
-			//for e := filtered.Front(); e != nil; e = e.Next() {
-			//	fmt.Printf("%v", e.Value)
-			//}
-			//fmt.Println()
-			if filtered.Len() != elements.Len() {
-				l := reactAll(filtered)
-				if l < min_length {
-					min_length = l
+				//for e := filtered.Front(); e != nil; e = e.Next() {
+				//	fmt.Printf("%v", e.Value)
+				//}
+				//fmt.Println()
+				if filtered.Len() != elements.Len() {
+					l <- reactAll(filtered)
 				}
+				wg.Done()
+			}()
+		}
+		wg.Wait()
+		close(l)
+		min_length := elements.Len()
+		for v := range l {
+			if v < min_length {
+				min_length = v
 			}
 		}
 		fmt.Println("min length", min_length)
