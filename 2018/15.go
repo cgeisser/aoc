@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"os"
 	"sort"
@@ -16,7 +17,7 @@ func main() {
 
 	bo := new(Board)
 	bo.grid = make([][]string, 0)
-	bo.players = make(map[coord]*Player)
+	bo.players = make(PlayerSet)
 	y := 0
 	for input.Scan() {
 		line := input.Text()
@@ -25,7 +26,7 @@ func main() {
 			b := line[x]
 			if b == 'G' || b == 'E' {
 				row[x] = "."
-				bo.players[coord{x, y}] = &Player{string(b), coord{x, y}, 3, 200}
+				bo.players[coord{x, y}] = &Player{string(b), 3, 200}
 			} else {
 				row[x] = string(b)
 			}
@@ -38,7 +39,8 @@ func main() {
 
 	bo.printGrid()
 	outcome := []int{1, 1, 0}
-	for r := 1; outcome[0] > 0 && outcome[1] > 0; r++ {
+	done := false
+	for r := 1; !done; r++ {
 		fmt.Println("round: ", r)
 		playorder := make(CoordSlice, 0)
 		//snap_players := make(map[coord]*Player)
@@ -47,16 +49,20 @@ func main() {
 		}
 
 		sort.Sort(playorder)
+		last_index := 0
 
-		for _, c := range playorder {
+		for pn, c := range playorder {
 			cur, ok := bo.players[c]
 			if !ok {
+				fmt.Println("missing: ", c)
 				continue
 			}
-			fmt.Println("ready player: ", c, cur)
+			fmt.Printf("ready player: %v %v   ", c, cur)
 			outcome = bo.getOutcome()
 			if outcome[0] == 0 || outcome[1] == 0 {
-				fmt.Println("done before round ended")
+				fmt.Println("  No targets left!")
+				last_index = pn
+				done = true
 				break
 			}
 			if bad := bo.badGuys(c); len(bad) > 0 {
@@ -64,8 +70,8 @@ func main() {
 			} else {
 				dests := make(map[coord]bool)
 				for b, badguy := range bo.players {
-					d := bo.avail(b)
 					if cur.t != badguy.t {
+						d := bo.avail(b)
 						//fmt.Println("available from: ", b, d)
 						for _, v := range d {
 							dests[v] = true
@@ -81,13 +87,33 @@ func main() {
 		}
 		outcome = bo.getOutcome()
 		bo.printGrid()
+		fmt.Println(" last player was ", last_index, len(playorder))
 		fmt.Println(r, outcome)
 	}
 }
 
+type PlayerSet map[coord]*Player
+
+func (ps PlayerSet) order() CoordSlice {
+	order := make(CoordSlice, 0, len(ps))
+	for c, _ := range ps {
+		order = append(order, c)
+	}
+	sort.Sort(order)
+	return order
+}
+
+func (ps PlayerSet) String() string {
+	var buf bytes.Buffer
+	for _, v := range ps.order() {
+		fmt.Fprintf(&buf, "%v:%v ", v, ps[v])
+	}
+	return buf.String()
+}
+
 type Board struct {
-	 grid [][]string
-	 players map[coord]*Player
+	grid    [][]string
+	players PlayerSet
 }
 
 func (b Board) getOutcome() []int {
@@ -108,7 +134,7 @@ func (b *Board) attack(c coord) bool {
 	if bad := b.badGuys(c); len(bad) > 0 {
 		fmt.Println(" targets in range: ", bad)
 		minhits := 0
-		attackorder := make([]coord, 0, len(bad))
+		attackorder := make(CoordSlice, 0, len(bad))
 		for x, b := range bad {
 			if minhits == 0 || b.hp < minhits {
 				minhits = b.hp
@@ -116,7 +142,7 @@ func (b *Board) attack(c coord) bool {
 			attackorder = append(attackorder, x)
 		}
 
-		sort.Sort(CoordSlice(attackorder))
+		sort.Sort(attackorder)
 
 		for _, x := range attackorder {
 			if bad[x].hp == minhits {
@@ -127,7 +153,7 @@ func (b *Board) attack(c coord) bool {
 					delete(b.players, x)
 					fmt.Println(" target destroyed!!")
 				}
-				return true				
+				return true
 			}
 		}
 	}
@@ -150,8 +176,8 @@ func (b Board) printGrid() {
 
 type CoordSlice []coord
 
-func (b Board) badGuys(s coord) map[coord]*Player {
-	out := make(map[coord]*Player)
+func (b Board) badGuys(s coord) PlayerSet {
+	out := make(PlayerSet)
 	for _, n := range neighbors(s) {
 		if c, ok := b.players[n]; ok && b.players[s].t != c.t {
 			//fmt.Println("adding badguy ", n, c)
@@ -172,7 +198,7 @@ func (b Board) empty(s coord) bool {
 }
 
 func neighbors(s coord) CoordSlice {
-	avail := make([]coord, 0, 4)
+	avail := make(CoordSlice, 0, 4)
 	avail = append(avail, coord{s[0], s[1] - 1})
 	avail = append(avail, coord{s[0] - 1, s[1]})
 	avail = append(avail, coord{s[0] + 1, s[1]})
@@ -180,8 +206,8 @@ func neighbors(s coord) CoordSlice {
 	return avail
 }
 
-func (b Board) avail(s coord) []coord {
-	avail := make([]coord, 0, 4)
+func (b Board) avail(s coord) CoordSlice {
+	avail := make(CoordSlice, 0, 4)
 	for _, n := range neighbors(s) {
 		if b.empty(n) {
 			avail = append(avail, n)
@@ -198,17 +224,17 @@ func (b Board) multiDyk(s coord, goal map[coord]bool) coord {
 		return s
 	}
 	v := make(map[coord]bool)
-	movelist := make([][]coord, 0, 10)
-	for _, a := range b.avail(s) {		
-		movelist = append(movelist, []coord{ a })
+	movelist := make([]CoordSlice, 0, 10)
+	for _, a := range b.avail(s) {
+		movelist = append(movelist, CoordSlice{a})
 	}
 
 	//fmt.Printf("search: %v for %v\n", s, goal)
 	//	fmt.Println("m: ", movelist)
 	for len(movelist) > 0 && len(movelist[0]) > 0 {
-//		fmt.Println("m: ", movelist)
+		//		fmt.Println("m: ", movelist)
 		cur := movelist[0]
-		lastspot := cur[len(cur) - 1]
+		lastspot := cur[len(cur)-1]
 		if _, found := goal[lastspot]; found {
 			//fmt.Println(cur)
 			return cur[0]
@@ -217,7 +243,7 @@ func (b Board) multiDyk(s coord, goal map[coord]bool) coord {
 		nextmoves := b.avail(lastspot)
 		for _, a := range nextmoves {
 			if _, visited := v[a]; !visited {
-				search := []coord{ cur[0], a }
+				search := CoordSlice{cur[0], a}
 				//fmt.Println("  s: ", search)
 				movelist = append(movelist, search)
 				v[a] = true
@@ -242,7 +268,6 @@ func (x CoordSlice) Swap(i, j int) { x[i], x[j] = x[j], x[i] }
 
 type Player struct {
 	t  string
-	xy coord
 	p  int
 	hp int
 }
