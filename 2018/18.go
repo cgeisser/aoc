@@ -3,14 +3,14 @@ package main
 import (
 	"bufio"
 	"bytes"
-	"os"
 	"fmt"
+	"os"
 )
 
 const boardmax = 50
 
 type board [boardmax][boardmax]string
-type nmap map[string]int
+type nmap [3]int
 
 func (b board) String() string {
 	var buf bytes.Buffer
@@ -24,8 +24,23 @@ func (b board) String() string {
 	return buf.String()
 }
 
+func (n *nmap) inc(s string) {
+	var key int
+	switch s {
+	case ".":
+		key = CLEAR
+	case "|":
+		key = TREE
+	case "#":
+		key = YARD
+	default:
+		panic("bad key")
+	}
+	n[key]++
+}
+
 func (b board) countNeighbors(xs, ys int) nmap {
-	m := make(nmap)
+	var m nmap
 	for x := xs - 1; x <= xs+1; x++ {
 		for y := ys - 1; y <= ys+1; y++ {
 			if (x == xs && y == ys) ||
@@ -33,22 +48,27 @@ func (b board) countNeighbors(xs, ys int) nmap {
 				y < 0 || y == boardmax {
 				continue
 			}
-			m[b[x][y]]++
+			m.inc(b[x][y])
 		}
 	}
 	return m
 }
 
 func (b board) getResource() int {
-	cnt := make(nmap)
+	var cnt nmap
 	for _, a := range b {
 		for _, v := range a {
-			cnt[v]++
+			cnt.inc(v)
 		}
 	}
-	return cnt["|"] * cnt["#"]
+	return cnt[TREE] * cnt[YARD]
 }
-	
+
+const (
+	CLEAR = iota
+	TREE
+	YARD
+)
 
 func (b board) iterate(nb *board) {
 	for y := 0; y < boardmax; y++ {
@@ -57,17 +77,18 @@ func (b board) iterate(nb *board) {
 			var changed bool
 			switch b[y][x] {
 			case ".":
-				if nm["|"] >= 3 {
+				if nm[TREE] >= 3 {
 					nb[y][x] = "|"
 					changed = true
 				}
 			case "|":
-				if nm["#"] >= 3 {
+				if nm[YARD] >= 3 {
 					nb[y][x] = "#"
-				changed = true}
+					changed = true
+				}
 
 			case "#":
-				if nm["#"] >= 1 && nm["|"] >= 1 {
+				if nm[YARD] >= 1 && nm[TREE] >= 1 {
 					nb[y][x] = "#"
 				} else {
 					nb[y][x] = "."
@@ -99,10 +120,13 @@ func main() {
 	active, prev := &a, &b
 
 	fmt.Println("prev: ", *prev)
-	for i := 1; i <= 10; i++ {	
+	for i := 1; i <= 100000; i++ {
 		prev.iterate(active)
-		fmt.Println("active: ", i, *active)
+		//		fmt.Println("active: ", i, *active)
 		prev, active = active, prev
+		if i%1000 == 0 {
+			fmt.Println("resources ", i, prev.getResource())
+		}
 	}
-	fmt.Println("resources ", prev.getResource())
+
 }
