@@ -19,7 +19,10 @@ func main() {
 	bo.clay = make(map[coord]bool)
 	for input.Scan() {
 		var start, x, y, xlen, ylen, skip int
-		fmt.Sscanf(input.Text(), "%c=%d, %c=%d..%d", &start, &x, &skip, &y, &ylen)
+		_, ok := fmt.Sscanf(input.Text(), "%c=%d, %c=%d..%d", &start, &x, &skip, &y, &ylen)
+		if ok != nil {
+			panic(fmt.Sprintf("%v %v", ok, input.Text()))
+		}
 		xlen = 1
 		ylen = ylen - y + 1
 		if start == int('y') {
@@ -36,31 +39,36 @@ func main() {
 	bo.fillGraph(bo.ng[coord{500, 0}])
 
 	bo.printGrid()
-	fmt.Println("reachable ", bo.reachable())
+	r, w := bo.reachable()
+	fmt.Println("reachable ", r, w)
 	f.Close()
 }
 
 type Board struct {
-	clay map[coord]bool
-	ng NodeGraph
+	clay                 map[coord]bool
+	ng                   NodeGraph
 	topleft, bottomright coord
+	miny                 int
 }
 
 func (b *Board) addclay(xy coord, xlen, ylen int) {
 	//fmt.Println("adding ", xy, xlen, ylen)
-	if (b.topleft == coord{0, 0} || b.bottomright == coord{0,0}) {
+	if b.miny == 0 || xy[1] < b.miny {
+		b.miny = xy[1]
+	}
+	if (b.topleft == coord{0, 0} || b.bottomright == coord{0, 0}) {
 		b.topleft, b.bottomright = xy, xy
 	}
 
 	if xy[0]-1 < b.topleft[0] {
 		b.topleft[0] = xy[0] - 1
 	}
-	
+
 	if xy[0]+xlen > b.bottomright[0] {
 		b.bottomright[0] = xy[0] + xlen
 	}
 	if xy[1]-1 < b.topleft[1] {
-		b.topleft[1] = xy[1]-1
+		b.topleft[1] = xy[1] - 1
 	}
 	if xy[1]+ylen > b.bottomright[1] {
 		b.bottomright[1] = xy[1] + ylen
@@ -78,6 +86,7 @@ func (b *Board) addclay(xy coord, xlen, ylen int) {
 func (b Board) printGrid() {
 	fmt.Println("tl ", b.topleft)
 	fmt.Println("br ", b.bottomright)
+	fmt.Println("miny ", b.miny)
 	for y := b.topleft[1]; y <= b.bottomright[1]; y++ {
 		for x := b.topleft[0]; x <= b.bottomright[0]; x++ {
 			if b.clay[coord{x, y}] {
@@ -105,21 +114,21 @@ func (b Board) fillGraph(n *Node) {
 		b.fillGraph(n.d)
 	}
 	if n.d == nil || n.d.enc {
-	//	fmt.Println("  hit floor")
+		//	fmt.Println("  hit floor")
 		if n.l != nil {
-			b.fillGraph(n.l)			 
+			b.fillGraph(n.l)
 		}
 		n.v = true
-                if n.r != nil && !n.r.v {
+		if n.r != nil && !n.r.v {
 			b.fillGraph(n.r)
 		}
-		
+
 		if n.d == nil || n.d.enc {
 			enc := true
 			if n.l != nil {
 				enc = n.l.enc
 			}
-		//	fmt.Println("   scanning right", enc)
+			//	fmt.Println("   scanning right", enc)
 			for sweep := n.r; sweep != nil && enc; sweep = sweep.r {
 				if !(sweep.d == nil || sweep.d.enc) {
 					enc = false
@@ -132,25 +141,31 @@ func (b Board) fillGraph(n *Node) {
 				}
 			}
 			n.enc = enc
-		}		
+		}
 	}
 	n.v = true
 }
 
-func (b Board) reachable() int {
+func (b Board) reachable() (int, int) {
 	r := 0
+	w := 0
 	for xy, x := range b.ng {
-		if xy[1] >= b.topleft[1]+1 && (x.v || x.enc) {
-			r++
+		if xy[1] >= b.topleft[1]+1 {
+			if x.enc {
+				w++
+			}
+			if x.v {
+				r++
+			}
 		}
 	}
-	return r
+	return r, w
 }
 
 func (b *Board) getGraph() {
 	b.ng = make(NodeGraph)
 
-	for y := b.topleft[1]; y <= b.bottomright[1]; y++ {
+	for y := 0; y <= b.bottomright[1]; y++ {
 		for x := b.topleft[0]; x <= b.bottomright[0]; x++ {
 			if b.clay[coord{x, y}] {
 				continue
@@ -166,7 +181,7 @@ func (b *Board) getGraph() {
 					}
 				}
 			}
-			if y > b.topleft[1] {
+			if y > 0 {
 				if !b.clay[coord{x, y - 1}] {
 					b.ng[coord{x, y - 1}].d = n
 				}
