@@ -2,8 +2,10 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"os"
+	"os/signal"
 )
 
 type inst struct {
@@ -41,51 +43,66 @@ func main() {
 	}
 	fmt.Println("ip ", ip)
 	fmt.Println("program", program)
-	var r reg = reg{0, 0, 0, 0, 0, 0}
+
+	// crash logging
+	c := make(chan os.Signal, 1)
+	signal.Notify(c)
+	var tombstone ringbuf
+	var stop bool
+	go func() {
+		<-c
+		stop = true
+		fmt.Println(tombstone)
+	}()
+
+	var r reg = reg{1, 0, 0, 0, 0, 0}
 	pc := r[ip]
-	for pc < len(program) {
-		op := program[pc]
+	instructions := 0
+	for pc < len(program) && !stop {
+		op := &program[pc]
 		r[ip] = pc
-		//savr := r
-		r = runOp(op.op, op.arg, r)
-		//fmt.Printf("ip=%d %v %v %v\n", pc, savr, op, r)
+		savr := r
+		op.runOp(&r)
+		tombstone.put(fmt.Sprintf("ip=%d %v %v %v\n", pc, savr, op, r))
 		pc = r[ip]
 		pc++
-		//		break
+		instructions++
 	}
 	fmt.Println("end ", pc, r)
+	fmt.Println("ran ", instructions)
 }
 
 type reg [6]int
 
-func runOp(op string, arg [3]int, r reg) reg {
+func (i inst) runOp(r *reg) {
 	//	fmt.Printf("  running %v %v %v\n", op, arg, r)
-	if op[:2] == "gt" || op[:2] == "eq" {
-		return compOp(op, arg, r)
+	if i.op[:2] == "gt" || i.op[:2] == "eq" {
+		i.compOp(r)
+		return
 	}
 
-	if op[:3] == "set" {
-		out := &r[arg[2]]
-		switch op[3] {
+	if i.op[:3] == "set" {
+		out := &r[i.arg[2]]
+		switch i.op[3] {
 		case 'r':
-			*out = r[arg[0]]
+			*out = r[i.arg[0]]
 		case 'i':
-			*out = arg[0]
+			*out = i.arg[0]
 		}
-		return r
+		return
 	}
 
 	var x, y int
-	switch op[3] {
+	switch i.op[3] {
 	case 'r':
-		x, y = r[arg[0]], r[arg[1]]
+		x, y = r[i.arg[0]], r[i.arg[1]]
 	case 'i':
-		x, y = r[arg[0]], arg[1]
+		x, y = r[i.arg[0]], i.arg[1]
 	default:
 		panic("bad register value")
 	}
-	out := &r[arg[2]]
-	switch op[:3] {
+	out := &r[i.arg[2]]
+	switch i.op[:3] {
 	case "add":
 		*out = x + y
 	case "mul":
@@ -95,36 +112,53 @@ func runOp(op string, arg [3]int, r reg) reg {
 	case "bor":
 		*out = x | y
 	default:
-		fmt.Println(op[:3])
+		fmt.Println(i.op[:3])
 		panic("bad opcode")
 	}
-	return r
 }
 
-func compOp(op string, arg [3]int, r reg) reg {
+func (i inst) compOp(r *reg) {
 	var x, y int
-	switch op[2:4] {
+	switch i.op[2:4] {
 	case "rr":
-		x, y = r[arg[0]], r[arg[1]]
+		x, y = r[i.arg[0]], r[i.arg[1]]
 	case "ri":
-		x, y = r[arg[0]], arg[1]
+		x, y = r[i.arg[0]], i.arg[1]
 	case "ir":
-		x, y = arg[0], r[arg[1]]
+		x, y = i.arg[0], r[i.arg[1]]
 	default:
 		panic("bad register value")
 	}
 
 	var val bool
-	switch op[:2] {
+	switch i.op[:2] {
 	case "gt":
 		val = (x > y)
 	case "eq":
 		val = (x == y)
 	}
 	if val {
-		r[arg[2]] = 1
+		r[i.arg[2]] = 1
 	} else {
-		r[arg[2]] = 0
+		r[i.arg[2]] = 0
 	}
-	return r
+}
+
+type ringbuf struct {
+	buf   [10]string
+	index int
+}
+
+func (r *ringbuf) put(s string) {
+	r.buf[r.index] = s
+	r.index = (r.index + 1) % len(r.buf)
+}
+
+func (r ringbuf) String() string {
+	var buf bytes.Buffer
+	buf.WriteString("crash dump:\n")
+	for i := 0; i < len(r.buf); i++ {
+		buf.WriteString(r.buf[(i+r.index)%len(r.buf)])
+	}
+	return buf.String()
 }
