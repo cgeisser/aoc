@@ -28,37 +28,39 @@ func main() {
 		}
 		bo.addclay(coord{x, y}, xlen, ylen)
 	}
-	graph := bo.getGraph()
-	bo.printGrid(graph)
+	//os.Exit(0)
+	bo.getGraph()
+	//bo.printGrid()
 
 	fmt.Println("now filled.")
-	fillGraph(graph[coord{500, 0}])
+	bo.fillGraph(bo.ng[coord{500, 0}])
 
-	bo.printGrid(graph)
-	fmt.Println("reachable ", graph.reachable())
+	bo.printGrid()
+	fmt.Println("reachable ", bo.reachable())
 	f.Close()
 }
 
 type Board struct {
 	clay map[coord]bool
-
+	ng NodeGraph
 	topleft, bottomright coord
 }
 
 func (b *Board) addclay(xy coord, xlen, ylen int) {
 	//fmt.Println("adding ", xy, xlen, ylen)
-	if (b.topleft == coord{0, 0} && b.bottomright == coord{0, 0}) {
+	if (b.topleft == coord{0, 0} || b.bottomright == coord{0,0}) {
 		b.topleft, b.bottomright = xy, xy
 	}
 
 	if xy[0]-1 < b.topleft[0] {
 		b.topleft[0] = xy[0] - 1
 	}
+	
 	if xy[0]+xlen > b.bottomright[0] {
 		b.bottomright[0] = xy[0] + xlen
 	}
 	if xy[1]-1 < b.topleft[1] {
-		b.topleft[1] = xy[1] - 1
+		b.topleft[1] = xy[1]-1
 	}
 	if xy[1]+ylen > b.bottomright[1] {
 		b.bottomright[1] = xy[1] + ylen
@@ -73,19 +75,19 @@ func (b *Board) addclay(xy coord, xlen, ylen int) {
 
 }
 
-func (b Board) printGrid(n NodeGraph) {
+func (b Board) printGrid() {
 	fmt.Println("tl ", b.topleft)
 	fmt.Println("br ", b.bottomright)
 	for y := b.topleft[1]; y <= b.bottomright[1]; y++ {
 		for x := b.topleft[0]; x <= b.bottomright[0]; x++ {
 			if b.clay[coord{x, y}] {
 				fmt.Printf("X")
-			} else if n[coord{x, y}].enc {
+			} else if b.ng[coord{x, y}].enc {
 				fmt.Printf("~")
-			} else if n[coord{x, y}].v {
+			} else if b.ng[coord{x, y}].v {
 				fmt.Printf("|")
 			} else {
-				fmt.Printf(".")
+				fmt.Printf(" ")
 			}
 		}
 		fmt.Println()
@@ -93,53 +95,60 @@ func (b Board) printGrid(n NodeGraph) {
 
 }
 
-func fillGraph(n *Node) bool {
+func (b Board) fillGraph(n *Node) {
 	//fmt.Println(" filling: ", n)
+	//b.printGrid()
 	if n.v || n.bottom {
-		return n.enc
+		return
 	}
-
-	enc := true
-	if n.d != nil {
-		//fmt.Println(" d", n.d)
-		if !n.d.v {
-			enc = fillGraph(n.d) && enc
-		}
+	if n.d != nil && !n.d.v {
+		b.fillGraph(n.d)
 	}
 	if n.d == nil || n.d.enc {
+	//	fmt.Println("  hit floor")
 		if n.l != nil {
-			//fmt.Println(" l", n.l)
-			if !n.l.v {
-				enc = fillGraph(n.l) && enc
-			}
-
+			b.fillGraph(n.l)			 
 		}
 		n.v = true
-		if n.r != nil {
-			//fmt.Println(" r", n.r)
-			if !n.r.v {
-				enc = fillGraph(n.r) && enc
-			}
+                if n.r != nil && !n.r.v {
+			b.fillGraph(n.r)
 		}
+		
+		if n.d == nil || n.d.enc {
+			enc := true
+			if n.l != nil {
+				enc = n.l.enc
+			}
+		//	fmt.Println("   scanning right", enc)
+			for sweep := n.r; sweep != nil && enc; sweep = sweep.r {
+				if !(sweep.d == nil || sweep.d.enc) {
+					enc = false
+				}
+				sweep.v = true
+			}
+			if enc {
+				for sweep := n.r; sweep != nil; sweep = sweep.r {
+					sweep.enc = true
+				}
+			}
+			n.enc = enc
+		}		
 	}
-	n.enc = enc
-
 	n.v = true
-	return n.enc
 }
 
-func (ng NodeGraph) reachable() int {
+func (b Board) reachable() int {
 	r := 0
-	for _, x := range ng {
-		if x.v || x.enc {
+	for xy, x := range b.ng {
+		if xy[1] >= b.topleft[1]+1 && (x.v || x.enc) {
 			r++
 		}
 	}
 	return r
 }
 
-func (b Board) getGraph() NodeGraph {
-	g := make(NodeGraph)
+func (b *Board) getGraph() {
+	b.ng = make(NodeGraph)
 
 	for y := b.topleft[1]; y <= b.bottomright[1]; y++ {
 		for x := b.topleft[0]; x <= b.bottomright[0]; x++ {
@@ -148,18 +157,18 @@ func (b Board) getGraph() NodeGraph {
 			}
 			n := &Node{}
 			n.xy = coord{x, y}
-			g[coord{x, y}] = n
+			b.ng[coord{x, y}] = n
 			if x > b.topleft[0] {
 				if x <= b.bottomright[0] {
 					if !b.clay[coord{x - 1, y}] {
-						n.l = g[coord{x - 1, y}]
-						g[coord{x - 1, y}].r = n
+						n.l = b.ng[coord{x - 1, y}]
+						b.ng[coord{x - 1, y}].r = n
 					}
 				}
 			}
 			if y > b.topleft[1] {
 				if !b.clay[coord{x, y - 1}] {
-					g[coord{x, y - 1}].d = n
+					b.ng[coord{x, y - 1}].d = n
 				}
 				if y == b.bottomright[1] {
 					n.bottom = true
@@ -167,7 +176,6 @@ func (b Board) getGraph() NodeGraph {
 			}
 		}
 	}
-	return g
 }
 
 type NodeGraph map[coord]*Node
@@ -192,17 +200,3 @@ func (n *Node) String() string {
 	}
 	return fmt.Sprintf("%v: %v %v %v b:%v v:%v enc:%v", n.xy, l, r, d, n.bottom, n.v, n.enc)
 }
-
-type CoordSlice []coord
-
-func (x CoordSlice) Len() int { return len(x) }
-func (x CoordSlice) Less(i, j int) bool {
-	if x[i][1] == x[j][1] {
-		return x[i][0] < x[j][0]
-	} else if x[i][1] < x[j][1] {
-		return true
-	}
-	return false
-}
-
-func (x CoordSlice) Swap(i, j int) { x[i], x[j] = x[j], x[i] }
