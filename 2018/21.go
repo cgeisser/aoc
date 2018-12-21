@@ -123,19 +123,28 @@ func main() {
 	fmt.Println("ip ", ip)
 	fmt.Println("program", program)
 
-	var r reg = reg{1, 0, 0, 0, 0, 0}
-	pc := r[ip]
-	instructions := 0
-	for pc < len(program) {
-		op := &program[pc]
-		r[ip] = pc
-		op.runOp(&r)
-		pc = r[ip]
-		pc++
-		instructions++
+	mininst := -1
+	for zero := 0; ; {
+		var r reg = reg{zero, 0, 0, 0, 0, 0}
+		pc := r[ip]
+		instructions := 0
+		for pc < len(program) {
+			op := &program[pc]
+			r[ip] = pc
+			op.runOp(&r)
+			pc = r[ip]
+			pc++
+			instructions++
+		}
+		fmt.Print("zero ", zero)
+		fmt.Println("end ", pc, r)
+		fmt.Println("ran ", instructions)
+		if mininst == -1 || instructions < mininst {
+			mininst = instructions
+			fmt.Println("new minimum! ", mininst)
+		}
+		break
 	}
-	fmt.Println("end ", pc, r)
-	fmt.Println("ran ", instructions)
 }
 
 type reg [6]int
