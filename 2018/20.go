@@ -55,7 +55,25 @@ func (d dir) moveCoord(xy coord) coord {
 	}
 }
 
-func (cr *room) build(re string, closeblock int) int {
+type parsetree struct {
+	s string
+	children []*parsetree
+}
+
+func build(re string) (*parsetree, int) {
+	clist := make([]*parsetree)
+	for i, c := range re {
+		if c == '|' || c=='(' {
+			subtree, eaten := parsetree(re[i+1:])
+			clist = append(clist, subtree)
+			break
+		}
+	}
+	pt := &parsetree{ re[:i], clist, 0)}
+	
+}
+
+func (cr *room) build(re string, closeblock) int {
 	fmt.Println("  parsing: ", re, closeblock)
 	if re == "" {
 		return 0
@@ -84,9 +102,12 @@ func (cr *room) build(re string, closeblock int) int {
 				break
 			}
 		}
+		options := 0
 		for ; consumed < closeparen; consumed++ {
-		//	fmt.Println(" option", re[consumed:])
-			consumed += cr.build(re[consumed:], closeparen-consumed)	
+			fmt.Println(" option", options, re[consumed:])
+			consumed += cr.build(re[consumed:], closeparen-consumed)
+			fmt.Println(" end option", options)
+options++
 		}
 		return consumed
 	} else {
