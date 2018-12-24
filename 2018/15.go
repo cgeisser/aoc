@@ -54,7 +54,7 @@ func main() {
 		for pn, c := range playorder {
 			cur, ok := bo.players[c]
 			if !ok {
-				fmt.Println("missing: ", c)
+				//fmt.Println("missing: ", c)
 				continue
 			}
 			fmt.Printf("ready player: %v %v   ", c, cur)
@@ -234,18 +234,19 @@ func (b Board) multiDyk(s coord, goal map[coord]bool) coord {
 	for len(movelist) > 0 {
 		//fmt.Println("m: ", movelist)
 		curdepth := len(movelist[0])
-		explored := 0
 		for _, cur := range movelist {
 			if len(cur) > curdepth {
 				break
 			}
-			explored++
 			lastspot := cur[len(cur)-1]
 			v[lastspot] = true
+			//fmt.Println("  cur: ", cur)
 			nextmoves := b.avail(lastspot)
+			//fmt.Println("  neighbors:", nextmoves)
 			for _, a := range nextmoves {
 				if _, visited := v[a]; !visited {
-					search := cur
+					search := make(CoordSlice, curdepth, curdepth+1)
+					copy(search, cur)
 					search = append(search, a)
 					//fmt.Println("  s: ", search)
 					movelist = append(movelist, search)
@@ -255,6 +256,7 @@ func (b Board) multiDyk(s coord, goal map[coord]bool) coord {
 		}
 		sort.Sort(movelist)
 		// check the top
+		explored := 0
 		for _, top := range movelist {
 			if len(top) > curdepth {
 				break
@@ -262,15 +264,18 @@ func (b Board) multiDyk(s coord, goal map[coord]bool) coord {
 			if goal[top[len(top)-1]] {
 				return top[0]
 			}
+			explored++
 		}
 		movelist = movelist[explored:]
 	}
+	fmt.Println("no move found")
 
 	return s
 }
 
 type MoveList []CoordSlice
-func (x MoveList) Len() int { return len(x) }
+
+func (x MoveList) Len() int      { return len(x) }
 func (x MoveList) Swap(i, j int) { x[i], x[j] = x[j], x[i] }
 func (x MoveList) Less(i, j int) bool {
 	if len(x[i]) == len(x[j]) {
