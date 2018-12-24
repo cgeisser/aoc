@@ -17,8 +17,9 @@ func main() {
 
 	bo := new(Board)
 	bo.grid = make([][]string, 0)
-	bo.players = make(PlayerSet)
+
 	y := 0
+	playercopy := make(PlayerSet)
 	for input.Scan() {
 		line := input.Text()
 		row := make([]string, len(line))
@@ -26,7 +27,7 @@ func main() {
 			b := line[x]
 			if b == 'G' || b == 'E' {
 				row[x] = "."
-				bo.players[coord{x, y}] = &Player{string(b), 3, 200}
+				playercopy[coord{x, y}] = &Player{string(b), 3, 200}
 			} else {
 				row[x] = string(b)
 			}
@@ -37,58 +38,73 @@ func main() {
 	}
 	f.Close()
 
-	bo.printGrid()
-	outcome := []int{1, 1, 0}
-	done := false
-	for r := 1; !done; r++ {
-		fmt.Println("round: ", r)
-		playorder := make(CoordSlice, 0)
-		//snap_players := make(map[coord]*Player)
-		for c := range bo.players {
-			playorder = append(playorder, c)
+	for elfpower := 4; ; elfpower++ {
+		bo.players = make(PlayerSet)
+		for c, p := range playercopy {
+			np := *p
+			if np.t == "E" {
+				np.p = elfpower
+			}
+			bo.players[c] = &np
 		}
 
-		sort.Sort(playorder)
-		last_index := 0
+		fmt.Println("     RESET!!!!!!")
+		bo.printGrid()
+		outcome := bo.getOutcome()
+		startelves := outcome[0]
+		done := false
+		for r := 1; !done; r++ {
+			fmt.Println("round: ", r, elfpower)
+			playorder := make(CoordSlice, 0)
+			//snap_players := make(map[coord]*Player)
+			for c := range bo.players {
+				playorder = append(playorder, c)
+			}
 
-		for pn, c := range playorder {
-			cur, ok := bo.players[c]
-			if !ok {
-				//fmt.Println("missing: ", c)
-				continue
-			}
-			fmt.Printf("ready player: %v %v   ", c, cur)
-			outcome = bo.getOutcome()
-			if outcome[0] == 0 || outcome[1] == 0 {
-				fmt.Println("  No targets left!")
-				last_index = pn
-				done = true
-				break
-			}
-			if bad := bo.badGuys(c); len(bad) > 0 {
-				bo.attack(c)
-			} else {
-				dests := make(map[coord]bool)
-				for b, badguy := range bo.players {
-					if cur.t != badguy.t {
-						d := bo.avail(b)
-						//fmt.Println("available from: ", b, d)
-						for _, v := range d {
-							dests[v] = true
+			sort.Sort(playorder)
+
+			for _, c := range playorder {
+				cur, ok := bo.players[c]
+				if !ok {
+					//fmt.Println("missing: ", c)
+					continue
+				}
+				//fmt.Printf("ready player: %v %v   ", c, cur)
+				outcome = bo.getOutcome()
+				if outcome[0] < startelves || outcome[1] == 0 {
+					//fmt.Println("  No targets left!")
+					//last_index = pn
+					done = true
+					break
+				}
+				if bad := bo.badGuys(c); len(bad) > 0 {
+					bo.attack(c)
+				} else {
+					dests := make(map[coord]bool)
+					for b, badguy := range bo.players {
+						if cur.t != badguy.t {
+							d := bo.avail(b)
+							//fmt.Println("available from: ", b, d)
+							for _, v := range d {
+								dests[v] = true
+							}
 						}
 					}
+					move := bo.multiDyk(c, dests)
+					//fmt.Println(" move: ", move)
+					delete(bo.players, c)
+					bo.players[move] = cur
+					bo.attack(move)
 				}
-				move := bo.multiDyk(c, dests)
-				fmt.Println(" move: ", move)
-				delete(bo.players, c)
-				bo.players[move] = cur
-				bo.attack(move)
 			}
+			fmt.Println(r, outcome)
 		}
-		outcome = bo.getOutcome()
 		bo.printGrid()
-		fmt.Println(" last player was ", last_index, len(playorder))
-		fmt.Println(r, outcome)
+		outcome = bo.getOutcome()
+		if startelves == outcome[0] {
+			fmt.Println("elves win with no losses")
+			break
+		}
 	}
 }
 
@@ -132,7 +148,7 @@ func (b Board) getOutcome() []int {
 
 func (b *Board) attack(c coord) bool {
 	if bad := b.badGuys(c); len(bad) > 0 {
-		fmt.Println(" targets in range: ", bad)
+		//		fmt.Println(" targets in range: ", bad)
 		minhits := 0
 		attackorder := make(CoordSlice, 0, len(bad))
 		for x, b := range bad {
@@ -147,11 +163,11 @@ func (b *Board) attack(c coord) bool {
 		for _, x := range attackorder {
 			if bad[x].hp == minhits {
 				target := bad[x]
-				fmt.Println(" selected target: ", x, target)
+				//				fmt.Println(" selected target: ", x, target)
 				target.hp -= b.players[c].p
 				if target.hp <= 0 {
 					delete(b.players, x)
-					fmt.Println(" target destroyed!!")
+					//					fmt.Println(" target destroyed!!")
 				}
 				return true
 			}
@@ -268,7 +284,7 @@ func (b Board) multiDyk(s coord, goal map[coord]bool) coord {
 		}
 		movelist = movelist[explored:]
 	}
-	fmt.Println("no move found")
+	//	fmt.Println("no move found")
 
 	return s
 }
