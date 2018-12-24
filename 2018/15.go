@@ -224,44 +224,79 @@ func (b Board) multiDyk(s coord, goal map[coord]bool) coord {
 		return s
 	}
 	v := make(map[coord]bool)
-	movelist := make([]CoordSlice, 0, 10)
+	movelist := make(MoveList, 0, 10)
 	for _, a := range b.avail(s) {
 		movelist = append(movelist, CoordSlice{a})
 	}
 
 	//fmt.Printf("search: %v for %v\n", s, goal)
-	//	fmt.Println("m: ", movelist)
-	for len(movelist) > 0 && len(movelist[0]) > 0 {
-		//		fmt.Println("m: ", movelist)
-		cur := movelist[0]
-		lastspot := cur[len(cur)-1]
-		if _, found := goal[lastspot]; found {
-			//fmt.Println(cur)
-			return cur[0]
-		}
-		v[lastspot] = true
-		nextmoves := b.avail(lastspot)
-		for _, a := range nextmoves {
-			if _, visited := v[a]; !visited {
-				search := CoordSlice{cur[0], a}
-				//fmt.Println("  s: ", search)
-				movelist = append(movelist, search)
-				v[a] = true
+	//fmt.Println("m: ", movelist)
+	for len(movelist) > 0 {
+		//fmt.Println("m: ", movelist)
+		curdepth := len(movelist[0])
+		explored := 0
+		for _, cur := range movelist {
+			if len(cur) > curdepth {
+				break
+			}
+			explored++
+			lastspot := cur[len(cur)-1]
+			v[lastspot] = true
+			nextmoves := b.avail(lastspot)
+			for _, a := range nextmoves {
+				if _, visited := v[a]; !visited {
+					search := cur
+					search = append(search, a)
+					//fmt.Println("  s: ", search)
+					movelist = append(movelist, search)
+					v[a] = true
+				}
 			}
 		}
-		movelist = movelist[1:]
+		sort.Sort(movelist)
+		// check the top
+		for _, top := range movelist {
+			if len(top) > curdepth {
+				break
+			}
+			if goal[top[len(top)-1]] {
+				return top[0]
+			}
+		}
+		movelist = movelist[explored:]
 	}
+
 	return s
 }
 
+type MoveList []CoordSlice
+func (x MoveList) Len() int { return len(x) }
+func (x MoveList) Swap(i, j int) { x[i], x[j] = x[j], x[i] }
+func (x MoveList) Less(i, j int) bool {
+	if len(x[i]) == len(x[j]) {
+		l := len(x[i])
+		if x[i][l-1] == x[j][l-1] {
+			return Less(x[i][0], x[j][0])
+		} else {
+			return Less(x[i][l-1], x[j][l-1])
+		}
+	}
+	return len(x[i]) < len(x[j])
+}
+
 func (x CoordSlice) Len() int { return len(x) }
-func (x CoordSlice) Less(i, j int) bool {
-	if x[i][1] == x[j][1] {
-		return x[i][0] < x[j][0]
-	} else if x[i][1] < x[j][1] {
+
+func Less(i, j coord) bool {
+	if i[1] == j[1] {
+		return i[0] < j[0]
+	} else if i[1] < j[1] {
 		return true
 	}
 	return false
+}
+
+func (x CoordSlice) Less(i, j int) bool {
+	return Less(x[i], x[j])
 }
 
 func (x CoordSlice) Swap(i, j int) { x[i], x[j] = x[j], x[i] }
