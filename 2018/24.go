@@ -43,7 +43,7 @@ func (a group) getDamage(t group) int {
 	if t.weak[a.weapon] {
 		return 2 * pwr
 	}
-	fmt.Printf("     %v %v would damage %v by %v\n", a.side, a.id, t.id, pwr)
+	//fmt.Printf("     %v %v would damage %v by %v\n", a.side, a.id, t.id, pwr)
 	return pwr
 }
 
@@ -186,6 +186,7 @@ func (p players) tothedeath() {
 		active := make(players, 0)
 		for _, g := range p {
 			g.targetted = false
+			g.curtarget = nil
 			if g.units > 0 {
 				active = append(active, g)
 				fmt.Println(g)
@@ -212,8 +213,8 @@ func (p players) tothedeath() {
 		// fight
 		sort.Sort(byInitiative(active))
 		for _, a := range active {
+			fmt.Println(a, a.initiative)
 			a.hit()
-			fmt.Println(a)
 		}
 
 		result, done = p.count()
