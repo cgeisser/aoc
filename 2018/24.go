@@ -41,7 +41,7 @@ func (a group) getDamage(t group) int {
 	}
 	pwr := a.pwr()
 	if t.weak[a.weapon] {
-		return 2 * pwr
+		pwr *= 2
 	}
 	//fmt.Printf("     %v %v would damage %v by %v\n", a.side, a.id, t.id, pwr)
 	return pwr
@@ -53,7 +53,7 @@ func (a group) pwr() int {
 
 func (a group) hit() {
 	if a.units == 0 {
-		fmt.Println("can't hit, I'm dead: ", a)
+		//fmt.Println("can't hit, I'm dead: ", a)
 		return
 	}
 	if a.curtarget != nil {
@@ -61,7 +61,7 @@ func (a group) hit() {
 
 		if damage > 0 {
 			unitslost := damage / a.curtarget.hitpoints
-			fmt.Printf("   %v group %v hits %v damage %d killed %d\n", a.side, a.id, a.curtarget.id, damage, unitslost)
+			//fmt.Printf("   %v group %v hits %v damage %d killed %d/%d\n", a.side, a.id, a.curtarget.id, damage, unitslost, a.curtarget.units)
 			if a.curtarget.units > unitslost {
 				a.curtarget.units -= unitslost
 			} else {
@@ -159,8 +159,27 @@ func main() {
 			}
 		}
 	}
+	//	os.Exit(1)
+	//	p.tothedeath()
 
-	p.tothedeath()
+	for boost := 1; ; boost++ {
+		newplayers := make(players, 0)
+		for _, n := range p {
+			np := *n
+			if np.side == "Immune System" {
+				np.attack += boost
+			}
+			newplayers = append(newplayers, &np)
+			//fmt.Println(np, np.attack)
+		}
+
+		result := newplayers.tothedeath()
+		fmt.Println("boost ", boost, result)
+		if result["Infection"] == 0 {
+			break
+		}
+		//		break
+	}
 }
 
 func (p players) count() (map[string]int, bool) {
@@ -178,10 +197,9 @@ func (p players) count() (map[string]int, bool) {
 	return ret, done
 }
 
-func (p players) tothedeath() {
+func (p players) tothedeath() map[string]int {
 	result, done := p.count()
 	for !done {
-
 		// copy active players
 		active := make(players, 0)
 		for _, g := range p {
@@ -189,7 +207,7 @@ func (p players) tothedeath() {
 			g.curtarget = nil
 			if g.units > 0 {
 				active = append(active, g)
-				fmt.Println(g)
+				//fmt.Println(g, g.attack)
 			}
 		}
 
@@ -200,10 +218,10 @@ func (p players) tothedeath() {
 		// for each active player, pick a target
 		for _, a := range active {
 			sort.Sort(byHits{a, targetlist})
-			fmt.Println(" choosing target for", a, targetlist)
+			//fmt.Println(" choosing target for", a, targetlist)
 			for _, t := range targetlist {
 				if a.side != t.side && !t.targetted && a.getDamage(*t) > 0 {
-					fmt.Println("     picked:", t)
+					//		fmt.Println("     picked:", t)
 					a.curtarget = t
 					t.targetted = true
 					break
@@ -213,11 +231,17 @@ func (p players) tothedeath() {
 		// fight
 		sort.Sort(byInitiative(active))
 		for _, a := range active {
-			fmt.Println(a, a.initiative)
+			//fmt.Println(a, a.initiative)
 			a.hit()
 		}
-
+		old_result := result
 		result, done = p.count()
-		fmt.Println(" end of round:", result)
+		if old_result["Immune System"] == result["Immune System"] && old_result["Infection"] == result["Infection"] {
+			fmt.Println("we're stuck")
+			done = true
+		}
+
+		//fmt.Println(" end of round:", result)
 	}
+	return result
 }
