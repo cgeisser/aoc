@@ -83,19 +83,28 @@ type nodecost struct {
 	cost, est int
 }
 
-type edgelist []nodecost
+type edgelist struct {
+	h   []*nodecost
+	loc map[node]int
+}
 
-func (el edgelist) Less(i, j int) bool { return el[i].cost+el[i].est < el[j].cost+el[j].est }
-func (el edgelist) Len() int           { return len(el) }
-func (el edgelist) Swap(i, j int)      { el[i], el[j] = el[j], el[i] }
+func (el edgelist) Less(i, j int) bool { return el.h[i].cost+el.h[i].est < el.h[j].cost+el.h[j].est }
+func (el edgelist) Len() int           { return len(el.h) }
+func (el edgelist) Swap(i, j int) {
+	el.loc[el.h[i].node] = j
+	el.loc[el.h[j].node] = i
+	el.h[i], el.h[j] = el.h[j], el.h[i]
+}
 
 func (el *edgelist) Push(i interface{}) {
-	*el = append(*el, i.(nodecost))
+	el.h = append(el.h, i.(*nodecost))
+	el.loc[i.(*nodecost).node] = len(el.h) - 1
 }
 
 func (el *edgelist) Pop() interface{} {
-	ret := (*el)[len(*el)-1]
-	*el = (*el)[:len(*el)-1]
+	delete(el.loc, el.h[len(el.h)-1].node)
+	ret := el.h[len(el.h)-1]
+	el.h = el.h[:len(el.h)-1]
 	return ret
 }
 
@@ -115,17 +124,14 @@ func toolcombos(a, b rtype) map[tool]bool {
 	allowed := make(map[tool]bool)
 	switch a {
 	case ROCK:
-
 		allowed[CLIMB] = true
 		allowed[TORCH] = true
 
 	case WET:
-
 		allowed[CLIMB] = true
 		allowed[NONE] = true
 
 	case NARROW:
-
 		allowed[TORCH] = true
 		allowed[NONE] = true
 
@@ -168,14 +174,19 @@ func (g grid) neighbors(c coord) []node {
 }
 
 func (g grid) shortest(start, target coord) int {
-	explore := make(edgelist, 0)
-	heap.Push(&explore, nodecost{node{start, TORCH}, 0, dist(start, target)})
-
+	var explore edgelist
+	explore.h = make([]*nodecost, 0)
+	explore.loc = make(map[node]int)
+	heap.Push(&explore, &nodecost{node{start, TORCH}, 0, dist(start, target)})
 	beenthere := make(map[node]bool)
-	for len(explore) > 0 {
-		current := heap.Pop(&explore).(nodecost)
+	tried := 0
+	for explore.Len() > 0 {
+		current := heap.Pop(&explore).(*nodecost)
+		tried++
 		beenthere[current.node] = true
 		if current.c == target {
+			fmt.Println("tried options: ", tried)
+			fmt.Println("heap size: ", explore.Len())
 			return current.cost
 		}
 		next := g.neighbors(current.c)
@@ -185,7 +196,16 @@ func (g grid) shortest(start, target coord) int {
 				if n.t != current.t {
 					cost = 8
 				}
-				heap.Push(&explore, nodecost{n, current.cost + cost, dist(n.c, target)})
+				i, found := explore.loc[n]
+				if found && current.cost+cost < explore.h[i].cost {
+					//fmt.Printf("better path for %v\n", v)
+					explore.h[i].cost = current.cost + cost
+					heap.Fix(&explore, i)
+				}
+
+				if !found {
+					heap.Push(&explore, &nodecost{n, current.cost + cost, dist(n.c, target)})
+				}
 			}
 		}
 
